@@ -8,5 +8,10 @@ Pytorch 1.2.0
 
 ## Execute example
 ### CIFAR
-
+~~~  
+CUDA_VISIBLE_DEVICES=0 nohup python we.py --cifar 10  --model mobilenet > WE/base/mobilenetv1_cifar10.log &
+~~~
 ### ImageNet
+~~~  
+CUDA_VISIBLE_DEVICES=0,1 nohup python we.py  --mov_model mobilenetv2 --scaling 0.25 --input-size 128 > WE/base/mobilenetv2_128-128.log &
+~~~
