@@ -63,7 +63,7 @@ parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
 parser.add_argument('--gpu', default=0, type=int,
                     help='GPU id to use.')
-parser.add_argument('--s', default='WE/save', type = str, 
+parser.add_argument('--s', default='WE/WE_imagenet/save', type = str, 
                     help='Session')
 best_acc1 = 0
 def main_worker(gpu, args):
