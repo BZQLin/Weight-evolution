@@ -1,5 +1,8 @@
 # Weight-evolution
-Weight Evolution: Improving Deep Neural Networks Training through Evolving Inferior Weight Values
+This is the PyTorch implementation of our ACMM 2021 paper "Weight Evolution: Improving Deep Neural Networks Training through Evolving Inferior Weight Values"
+
+In this paper, we throw up two important questions about network reactivation: how to identify and update bad genes？We then explained in detail the four strategies for solving the problems. 
+
 
 
 ## Prerequisites
