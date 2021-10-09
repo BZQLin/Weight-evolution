@@ -5,33 +5,28 @@ import random
 import shutil
 import time
 import warnings
-
+import copy
+import sys
+import pickle
+import numpy as np
+import collections
 import torch
 import torch.nn as nn
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.optim
+import torch.optim as optim
 import torch.multiprocessing as mp
 import torch.utils.data
 import torch.utils.data.distributed
+import torchvision
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as models
-from models.mobilenetv2 import MobileNet2
-
-import torch.optim as optim
 import torch.nn.functional as F
-import sys
-import pickle
-import numpy as np
-import random
-import torchvision
-import torchvision.transforms as transforms
-import collections
-# from efficientnet_pytorch import EfficientNet
-import copy
-
+from data import get_loaders
+from models.mobilenetv2 import MobileNet2
 
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
@@ -100,25 +95,12 @@ parser.add_argument('--scaling', type=float, default=0.25, metavar='SC', help='S
 parser.add_argument('--input-size', type=int, default=128, metavar='I',
                     help='Input size of MobileNet, multiple of 32 (default 224).')
 
-
 best_acc1 = 0
 args = parser.parse_args()
 print(args)
 print('PID:%d' % (os.getpid()))
 print(time.strftime("%Y-%m-%d--%H:%M:%S", time.localtime()))
-# seed_model = 1029
-# def seed_torch(seed=args.seed):
-#     random.seed(seed)
-#     os.environ['PYTHONHASHSEED'] = str(seed)
-#     np.random.seed(seed)
-#     torch.manual_seed(seed)
-#     torch.cuda.manual_seed(seed)
-#     torch.cuda.manual_seed_all(seed)
-#     torch.backends.cudnn.benchmark = False
-#     torch.backends.cudnn.deterministic = True
 
-
-# mask
 def sigmoid(x):
     # TODO: Implement sigmoid function
     return 1/(1 + np.exp(-x))
@@ -132,7 +114,6 @@ def valid_num(net, epoch):
         [m1.weight.data for m1 in net.modules() if isinstance(m1, nn.BatchNorm2d)])
     norm_bias = torch.cat(
         [m1.bias.data.abs() for m1 in net.modules() if isinstance(m1, nn.BatchNorm2d)])
-    # 序号为auto-e3r3  后面用非线性来指导
     if epoch < 30:
         radio_conv = args.radio_conv * sigmoid(epoch/8)
         radio_bn = args.radio_bn * sigmoid(epoch/8)
@@ -153,13 +134,13 @@ def valid_num(net, epoch):
     th_conv = sorted(norm)[int(div_conv)]
     th_bn = sorted(norm_bn)[int(div_bn)]
     th_bias = sorted(norm_bias)[int(div_bias)]
-    print('Total filters number:\t', len(norm))
-    print('invalid filters number of conv:\t', int(sum((norm < th_conv).double())))
-    print('ratio of conv:\t', int(sum((norm < th_conv).double())) / len(norm))
-    print('Total filters number of bn:\t', len(norm_bn))
-    print('invalid filters number of bn:\t', int(sum((norm_bn < th_bn).double())))
-    print('ratio of bn:\t', int(sum((norm_bn < th_bn).double())) / len(norm_bn))
-    print('radio_conv:%f, radio_bn:%f' % (radio_conv, radio_bn))
+    # print('Total filters number:\t', len(norm))
+    # print('invalid filters number of conv:\t', int(sum((norm < th_conv).double())))
+    # print('ratio of conv:\t', int(sum((norm < th_conv).double())) / len(norm))
+    # print('Total filters number of bn:\t', len(norm_bn))
+    # print('invalid filters number of bn:\t', int(sum((norm_bn < th_bn).double())))
+    # print('ratio of bn:\t', int(sum((norm_bn < th_bn).double())) / len(norm_bn))
+    # print('radio_conv:%f, radio_bn:%f' % (radio_conv, radio_bn))
     return int(len(norm)), int(sum((norm < th_conv).double()))
  
 def evolution(net):
@@ -169,14 +150,8 @@ def evolution(net):
                 num_filters = len(m1.weight.data)
                 m1_norm = torch.norm(m1.weight.data.reshape(m1.weight.data.shape[0], -1), p=1, dim=1) / m1.weight.data.shape[1]
                 low_fliter_index_per_m1, weight_sort_index = m1_norm.sort(descending=True)
-                # # 最大核的展开
-                # max_ori_squeeze = torch.squeeze(m1.weight.data[weight_sort_index[0]].reshape(-1,1)) # 展开
-                # max_ori_squeeze_sort = sorted(max_ori_squeeze, key=abs,reverse=True)
-                # # 最大核的最大值
-                # max_ori = max_ori_squeeze_sort[0]
                 hight_fliter_count_m1 = 0
                 for i in low_fliter_index_per_m1:
-                    # 大于  所以这里的'm1_count_cn = 会偏大一点 因为计算的是大于的那部分
                     if i >= th_conv:
                         hight_fliter_count_m1 += 1
                 hight_fliter_count_m1_real = 0
@@ -188,22 +163,20 @@ def evolution(net):
                     if hight_fliter_count_m1_real == 0:
                         low_cut_count +=1
                         if low_cut_count >= ln_per:
-                            print('cnslow_cut_count >= %d' % ln_per)
                             hight_fliter_count_m1_real = 1
                             low_cut_count = 0
                     else:
                         low_cut_count = 0
-                # part1
+
                 if hight_fliter_count_m1_real > (num_filters-hight_fliter_count_m1):
                     hight_fliter_count_m1_real = (num_filters-hight_fliter_count_m1)
 
                 hight_fliter_count_m1_real_cut = num_filters - hight_fliter_count_m1_real
 
-                weight_sort_index_index = weight_sort_index[hight_fliter_count_m1_real_cut:]  # 后面部分要替换掉的卷积核的下标
-                weight_sort_index_index_hight = weight_sort_index[:hight_fliter_count_m1_real_cut]  # 后面部分要替换掉的卷积核的下标
+                weight_sort_index_index = weight_sort_index[hight_fliter_count_m1_real_cut:]  
+                weight_sort_index_index_hight = weight_sort_index[:hight_fliter_count_m1_real_cut]  
                 weight_sort_index_zip = [list(t) for t in zip(weight_sort_index_index_hight, weight_sort_index_index)]
 
-                # 激活阶段： alp 
                 for [i,j] in weight_sort_index_zip:
                     a_value1 = torch.norm(m1.weight.data[j].reshape(1, -1), p=1, dim=1)
                     a_value2 = torch.norm(m1.weight.data[i].reshape(1, -1), p=1, dim=1)
@@ -228,9 +201,7 @@ def evolution(net):
             with torch.no_grad():
                 num_filters = len(m1.weight.data)
                 low_fliter_index_per_m1, weight_sort_index_m1 = m1.weight.data.abs().sort(descending=True) 
-                # max_ori = m1.weight.data[weight_sort_index_m1[0]]
                 low_fliter_index_per_b1, weight_sort_index_b1 = m1.bias.data.abs().sort(descending=True) # 小到大
-                # max_ori2 = m1.bias.data[weight_sort_index_b1[0]]
                 hight_fliter_count_m1 = 0
                 for i in low_fliter_index_per_m1:
                     if i >= th_bn:
@@ -243,12 +214,11 @@ def evolution(net):
                     if hight_fliter_count_m1_real == 0:
                         low_cut_count_bn +=1
                         if low_cut_count_bn >= ln_per:
-                            print('bnslow_cut_count >= %d'%ln_per)
                             hight_fliter_count_m1_real = 1
                             low_cut_count_bn = 0
                     else:
                         low_cut_count_bn = 0
-                # part
+
                 if hight_fliter_count_m1_real > (num_filters-hight_fliter_count_m1):
                     hight_fliter_count_m1_real = (num_filters-hight_fliter_count_m1)
                 hight_fliter_count_m1_real_cut = num_filters - hight_fliter_count_m1_real
@@ -269,7 +239,7 @@ def evolution(net):
                             low_cut_count_bias = 0
                     else:
                         low_cut_count_bias = 0
-                # part
+
                 if hight_fliter_count_b1_real > (num_filters-hight_fliter_count_b1):
                     hight_fliter_count_b1_real = (num_filters-hight_fliter_count_b1)
                 hight_fliter_count_b1_real_cut = num_filters - hight_fliter_count_b1_real
@@ -290,9 +260,7 @@ def evolution(net):
     return net
 
 def main():
-    
     if args.seed is not None:
-        # seed_torch()
         random.seed(args.seed)
         torch.manual_seed(args.seed)
         cudnn.deterministic = True
@@ -301,7 +269,6 @@ def main():
                       'which can slow down your training considerably! '
                       'You may see unexpected behavior when restarting '
                       'from checkpoints.')
-
     if args.gpu is not None:
         warnings.warn('You have chosen a specific GPU. This will completely '
                       'disable data parallelism.')
@@ -419,54 +386,49 @@ def main_worker(gpu, ngpus_per_node, args):
     cudnn.benchmark = True
 
     # Data loading code
-    traindir = os.path.join(args.data, 'train')
-    valdir = os.path.join(args.data, 'val')
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
-
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        transforms.Compose([
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ]))
-
-    if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+    if args.mov_model == 'mobilenetv2':
+        train_loader, val_loader = get_loaders(args.data, args.batch_size, args.batch_size, args.input_size,
+                                           args.workers)
     else:
-        train_sampler = None
+        traindir = os.path.join(args.data, 'train')
+        valdir = os.path.join(args.data, 'val')
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                         std=[0.229, 0.224, 0.225])
 
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+        train_dataset = datasets.ImageFolder(
+            traindir,
+            transforms.Compose([
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normalize,
+            ]))
 
-    val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            normalize,
-        ])),
-        batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+        if args.distributed:
+            train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+        else:
+            train_sampler = None
 
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
+            num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+
+        val_loader = torch.utils.data.DataLoader(
+            datasets.ImageFolder(valdir, transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                normalize,
+            ])),
+            batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True)
+    
+    
     if args.evaluate:
         validate(val_loader, model, criterion, args)
         return
 
-    
-
-
-    # base_model = torch.load('image_save/checkpoint_res34_piece-ln5-0.01_1.pth')['state_dict']
-    # model.load_state_dict(base_model,False)
-
-    # state = {
-    #         'net': model.state_dict(),
-    # }
-    # torch.save(model, '%s/%s_-1_1.t7' % (args.s, args.new_model))
-    # args.start_epoch = 75
+   
     low_cut_count = 0
     low_cut_count_bn = 0
     low_cut_count_bias = 0
