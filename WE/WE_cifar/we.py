@@ -177,14 +177,6 @@ def valid_num(net, epoch):
     th_conv = sorted(norm)[int(div_conv)]
     th_bn = sorted(norm_bn)[int(div_bn)]
     th_bias = sorted(norm_bias)[int(div_bias)]
-    # print('Total filters number:\t', len(norm))
-    # print('invalid filters number of conv 0.1 :\t', int(sum((norm < 0.1).double())))
-    # print('invalid filters number of conv 0.1 :\t', int(sum((norm < 0.01).double())))
-    # print('ratio of conv:\t', int(sum((norm < th_conv).double())) / len(norm))
-    # print('Total filters number of bn:\t', len(norm_bn))
-    # print('invalid filters number of bn:\t', int(sum((norm_bn < th_bn).double())))
-    # print('ratio of bn:\t', int(sum((norm_bn < th_bn).double())) / len(norm_bn))
-    # print('radio_conv:%f, radio_bn:%f' % (radio_conv, radio_bn))
     return int(len(norm)), int(sum((norm < th_conv).double()))
     
 def evolution(net):
