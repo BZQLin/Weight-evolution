@@ -9,11 +9,13 @@ Pytorch 1.2.0
 ## Execute example
 ### CIFAR
 ~~~  
-CUDA_VISIBLE_DEVICES=0 nohup python we.py --cifar 10  --model mobilenet > WE/base/mobilenetv1_cifar10.log 2>&1 &
+CUDA_VISIBLE_DEVICES=0 nohup python we.py --cifar 10  --model mobilenet > WE/base/we_mobilenetv1_cifar10.log 2>&1 &
+CUDA_VISIBLE_DEVICES=0 nohup python we.py --cifar 10  --model resnet110 > WE/base/we_resnet110_cifar10.log 2>&1 &
 ~~~
 ### ImageNet
 ~~~  
-CUDA_VISIBLE_DEVICES=0,1 nohup python we.py  --mov_model mobilenetv2 --scaling 0.25 --input-size 128 > WE/base/mobilenetv2_128-128.log 2>&1 &
+CUDA_VISIBLE_DEVICES=0,1 nohup python we.py  --mov_model mobilenetv2 --scaling 0.25 --input-size 128 > WE/base/we_mobilenetv2_128-128.log 2>&1 &
+CUDA_VISIBLE_DEVICES=0,1 nohup python we.py  --arch resnet34 --radio_conv 0.02 --radio_bn 0.02 > WE/base/we_resnet34.log 2>&1 &
 ~~~
 
 # References
