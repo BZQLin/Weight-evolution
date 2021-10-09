@@ -18,5 +18,7 @@ CUDA_VISIBLE_DEVICES=0,1 nohup python we.py  --mov_model mobilenetv2 --scaling 0
 
 # References
 For CIFAR, our code is based on https://github.com/kuangliu/pytorch-cifar.git
+
 For ImageNet, our code is based on https://github.com/pytorch/examples/tree/master/imagenet
+
 For Mobilenetv2, our code is based on https://github.com/Randl/MobileNetV2-pytorch
