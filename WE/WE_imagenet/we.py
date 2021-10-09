@@ -84,7 +84,7 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
                          'N processes per node, which has N GPUs. This is the '
                          'fastest way to use PyTorch for either single node or '
                          'multi node data parallel training')
-parser.add_argument('--s', default='base', type=str)
+parser.add_argument('--s', default='WE/WE_imagenet/save', type=str)
 parser.add_argument('--mov_model', default='m2', type=str)
 parser.add_argument('--radio_conv', default=0.02, type=float)
 parser.add_argument('--radio_bn', default=0.02, type=float)
