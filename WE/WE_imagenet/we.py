@@ -1,3 +1,4 @@
+
 from __future__ import print_function
 import argparse
 import os
@@ -134,13 +135,7 @@ def valid_num(net, epoch):
     th_conv = sorted(norm)[int(div_conv)]
     th_bn = sorted(norm_bn)[int(div_bn)]
     th_bias = sorted(norm_bias)[int(div_bias)]
-    # print('Total filters number:\t', len(norm))
-    # print('invalid filters number of conv:\t', int(sum((norm < th_conv).double())))
-    # print('ratio of conv:\t', int(sum((norm < th_conv).double())) / len(norm))
-    # print('Total filters number of bn:\t', len(norm_bn))
-    # print('invalid filters number of bn:\t', int(sum((norm_bn < th_bn).double())))
-    # print('ratio of bn:\t', int(sum((norm_bn < th_bn).double())) / len(norm_bn))
-    # print('radio_conv:%f, radio_bn:%f' % (radio_conv, radio_bn))
+
     return int(len(norm)), int(sum((norm < th_conv).double()))
  
 def evolution(net):
@@ -189,8 +184,8 @@ def evolution(net):
                             large_one_squ = torch.squeeze(p.reshape(1, -1))
                             small_one_squ = torch.squeeze(q.reshape(1, -1))
                             large_one_sort = sorted(large_one_squ, key=abs,reverse=True)
-                            small_one_sort = sorted(small_one_squ, key=abs,reverse=False)  # 可以换一下
-                            alp = small_one_sort[0] / (small_one_sort[0] + large_one_sort[0])  # 元素
+                            small_one_sort = sorted(small_one_squ, key=abs,reverse=False)  
+                            alp = small_one_sort[0] / (small_one_sort[0] + large_one_sort[0]) 
                             weight_ele = large_one_sort[0] * alp + small_one_sort[0] * (1-alp)
                             weight_ele = torch.squeeze(weight_ele)
                             large_one_tensor_fill = torch.ones_like(p).fill_(weight_ele)
@@ -201,7 +196,7 @@ def evolution(net):
             with torch.no_grad():
                 num_filters = len(m1.weight.data)
                 low_fliter_index_per_m1, weight_sort_index_m1 = m1.weight.data.abs().sort(descending=True) 
-                low_fliter_index_per_b1, weight_sort_index_b1 = m1.bias.data.abs().sort(descending=True) # 小到大
+                low_fliter_index_per_b1, weight_sort_index_b1 = m1.bias.data.abs().sort(descending=True) 
                 hight_fliter_count_m1 = 0
                 for i in low_fliter_index_per_m1:
                     if i >= th_bn:
