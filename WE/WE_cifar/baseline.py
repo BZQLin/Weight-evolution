@@ -14,12 +14,11 @@ import sys
 import pickle
 import numpy as np
 import time
+import random
 from models.resnet import *
 from models.vgg import *
 from models.mobilenetv2 import MobileNetV2
 from models.mobilenet import MobileNet
-import random
-# from models.densenet import *
 from models.shufflenetv1 import shufflenet
 
 
@@ -36,20 +35,9 @@ parser.add_argument('--cifar', default=10, type=int)
 parser.add_argument('--print_frequence', default=1000, type=int)
 parser.add_argument('--seed', default=1029, type=int)
 args = parser.parse_args()
-# args.device = 'cuda:3' if torch.cuda.is_available() else 'cpu'
+# args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(args)
 print('PID:%d' % (os.getpid()))
-
-# def seed_torch(seed=args.seed):
-#     random.seed(seed)
-#     os.environ['PYTHONHASHSEED'] = str(seed)
-#     np.random.seed(seed)
-#     torch.manual_seed(seed)
-#     torch.cuda.manual_seed(seed)
-#     torch.cuda.manual_seed_all(seed)
-#     torch.backends.cudnn.benchmark = False
-#     torch.backends.cudnn.deterministic = True
-# seed_torch()
 
 if args.model == 'resnet20':
     net = resnet20(args.cifar).to(args.device)
@@ -71,12 +59,9 @@ elif args.model == 'vgg11':
     net = vgg11(args.cifar).to(args.device)
 elif args.model == 'vgg19':
     net = vgg19(args.cifar).to(args.device)
-# elif args.model == 'densenet40':
-#     net = DenseNet40_4(args.cifar).to(args.device)
 elif args.model == 'vgg19_n':
     net = vgg19_n(args.cifar).to(args.device)
-    
-# net=torch.nn.DataParallel(net)
+
 print(net)
 print(time.strftime("%Y-%m-%d--%H:%M:%S", time.localtime()))
 start_epoch = 0
