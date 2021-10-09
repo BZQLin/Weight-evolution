@@ -12,13 +12,13 @@ import argparse
 import numpy as np
 import time
 import random
+import copy
 from models.resnet import *
 from models.vgg import *
 from models.mobilenetv2 import MobileNetV2
 from models.mobilenet import MobileNet
 from models.shufflenetv1 import shufflenet
-import copy
-# from models.densenet40 import *
+
 
 
 parser = argparse.ArgumentParser(description='PyTorch Grafting Training')
@@ -40,21 +40,10 @@ parser.add_argument('--radio_bias', default=0.05, type=float)
 parser.add_argument('--lab', default=0.1, type=float)
 parser.add_argument('--ln_c', default=2, type=int)
 args = parser.parse_args()
-args.device = 'cuda:5' if torch.cuda.is_available() else 'cpu'
+# args.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 print(args)
 print('Session:%s\tModel:\tPID:%d' % (args.s, os.getpid()))
 print(args.device)
-# seed
-def seed_torch(seed=args.seed):
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
-seed_torch()
 
 if args.model == 'resnet20':
     net = resnet20(args.cifar).to(args.device)
@@ -78,16 +67,13 @@ elif args.model == 'vgg19':
     net = vgg19(args.cifar).to(args.device)
 elif args.model == 'vgg19_n':
     net = vgg19_n(args.cifar).to(args.device)
-# elif args.model == 'densenet40':
-#     net = DenseNet40(args.cifar).to(args.device)
-
-print(time.strftime("%Y-%m-%d--%H:%M:%S", time.localtime()))
+    
 start_epoch = 0
 best_acc = 0
 print('The initial learning rate is:', args.lr)
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4, nesterov=False)
-lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=60, gamma=0.1) # 需要修改
+lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=60, gamma=0.1) 
 
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
@@ -158,6 +144,7 @@ def train(epoch):
 def sigmoid(x):
     # TODO: Implement sigmoid function
     return 1/(1 + np.exp(-x))
+   
 
 def valid_num(net, epoch):
     norm = torch.cat(
@@ -166,8 +153,7 @@ def valid_num(net, epoch):
         [m1.weight.data.abs() for m1 in net.modules() if isinstance(m1, nn.BatchNorm2d)])
     norm_bias = torch.cat(
         [m1.bias.data.abs() for m1 in net.modules() if isinstance(m1, nn.BatchNorm2d)])
-
-    # 序号为auto-e3r5  后面用非线性来指导
+        
     if epoch < 60:
         radio_conv = args.radio_conv * sigmoid(epoch/15)
         radio_bn = args.radio_bn * sigmoid(epoch/15)
@@ -191,14 +177,14 @@ def valid_num(net, epoch):
     th_conv = sorted(norm)[int(div_conv)]
     th_bn = sorted(norm_bn)[int(div_bn)]
     th_bias = sorted(norm_bias)[int(div_bias)]
-    print('Total filters number:\t', len(norm))
-    print('invalid filters number of conv 0.1 :\t', int(sum((norm < 0.1).double())))
-    print('invalid filters number of conv 0.1 :\t', int(sum((norm < 0.01).double())))
-    print('ratio of conv:\t', int(sum((norm < th_conv).double())) / len(norm))
-    print('Total filters number of bn:\t', len(norm_bn))
-    print('invalid filters number of bn:\t', int(sum((norm_bn < th_bn).double())))
-    print('ratio of bn:\t', int(sum((norm_bn < th_bn).double())) / len(norm_bn))
-    print('radio_conv:%f, radio_bn:%f' % (radio_conv, radio_bn))
+    # print('Total filters number:\t', len(norm))
+    # print('invalid filters number of conv 0.1 :\t', int(sum((norm < 0.1).double())))
+    # print('invalid filters number of conv 0.1 :\t', int(sum((norm < 0.01).double())))
+    # print('ratio of conv:\t', int(sum((norm < th_conv).double())) / len(norm))
+    # print('Total filters number of bn:\t', len(norm_bn))
+    # print('invalid filters number of bn:\t', int(sum((norm_bn < th_bn).double())))
+    # print('ratio of bn:\t', int(sum((norm_bn < th_bn).double())) / len(norm_bn))
+    # print('radio_conv:%f, radio_bn:%f' % (radio_conv, radio_bn))
     return int(len(norm)), int(sum((norm < th_conv).double()))
     
 def evolution(net):
@@ -208,20 +194,13 @@ def evolution(net):
                 num_filters = len(m1.weight.data)
                 m1_norm = torch.norm(m1.weight.data.reshape(m1.weight.data.shape[0], -1), p=1, dim=1) / m1.weight.data.shape[1]
                 low_fliter_index_per_m1, weight_sort_index = m1_norm.sort(descending=True)
-                # # 最大核的展开
-                # max_ori_squeeze = torch.squeeze(m1.weight.data[weight_sort_index[0]].reshape(-1,1)) # 展开
-                # max_ori_squeeze_sort = sorted(max_ori_squeeze, key=abs,reverse=True)
-                # # 最大核的最大值
-                # max_ori = max_ori_squeeze_sort[0]
                 hight_fliter_count_m1 = 0
                 for i in low_fliter_index_per_m1:
-                    # 大于  所以这里的'm1_count_cn = 会偏大一点 因为计算的是大于的那部分
                     if i >= th_conv:
                         hight_fliter_count_m1 += 1
                 hight_fliter_count_m1_real = 0
                 if hight_fliter_count_m1 != num_filters:
                     low_cut = [i for i in low_fliter_index_per_m1 if i.abs() <= (low_fliter_index_per_m1[0].abs())*args.lab]
-
                     hight_fliter_count_m1_real = len(low_cut)
                     global low_cut_count
                     if hight_fliter_count_m1_real == 0:
@@ -238,11 +217,11 @@ def evolution(net):
 
                 hight_fliter_count_m1_real_cut = num_filters - hight_fliter_count_m1_real
 
-                weight_sort_index_index = weight_sort_index[hight_fliter_count_m1_real_cut:]  # 后面部分要替换掉的卷积核的下标
-                weight_sort_index_index_hight = weight_sort_index[:hight_fliter_count_m1_real_cut]  # 后面部分要替换掉的卷积核的下标
+                weight_sort_index_index = weight_sort_index[hight_fliter_count_m1_real_cut:]  
+                weight_sort_index_index_hight = weight_sort_index[:hight_fliter_count_m1_real_cut]  
                 weight_sort_index_zip = [list(t) for t in zip(weight_sort_index_index_hight, weight_sort_index_index)]
 
-                # 激活阶段： alp 
+                # Crossover strategy.
                 for [i,j] in weight_sort_index_zip:
                     a_value1 = torch.norm(m1.weight.data[j].reshape(1, -1), p=1, dim=1)
                     a_value2 = torch.norm(m1.weight.data[i].reshape(1, -1), p=1, dim=1)
@@ -255,8 +234,8 @@ def evolution(net):
                             large_one_squ = torch.squeeze(p.reshape(1, -1))
                             small_one_squ = torch.squeeze(q.reshape(1, -1))
                             large_one_sort = sorted(large_one_squ, key=abs,reverse=True)
-                            small_one_sort = sorted(small_one_squ, key=abs,reverse=False)  # 可以换一下
-                            alp = small_one_sort[0] / (small_one_sort[0] + large_one_sort[0])  # 元素
+                            small_one_sort = sorted(small_one_squ, key=abs,reverse=False)
+                            alp = small_one_sort[0] / (small_one_sort[0] + large_one_sort[0])
                             weight_ele = large_one_sort[0] * alp + small_one_sort[0] * (1-alp)
                             weight_ele = torch.squeeze(weight_ele)
                             large_one_tensor_fill = torch.ones_like(p).fill_(weight_ele)
@@ -267,9 +246,7 @@ def evolution(net):
             with torch.no_grad():
                 num_filters = len(m1.weight.data)
                 low_fliter_index_per_m1, weight_sort_index_m1 = m1.weight.data.abs().sort(descending=True) 
-                # max_ori = m1.weight.data[weight_sort_index_m1[0]]
-                low_fliter_index_per_b1, weight_sort_index_b1 = m1.bias.data.abs().sort(descending=True) # 小到大
-                # max_ori2 = m1.bias.data[weight_sort_index_b1[0]]
+                low_fliter_index_per_b1, weight_sort_index_b1 = m1.bias.data.abs().sort(descending=True)
                 hight_fliter_count_m1 = 0
                 for i in low_fliter_index_per_m1:
                     if i >= th_bn:
@@ -287,7 +264,7 @@ def evolution(net):
                             low_cut_count_bn = 0
                     else:
                         low_cut_count_bn = 0
-                # part
+=
                 if hight_fliter_count_m1_real > (num_filters-hight_fliter_count_m1):
                     hight_fliter_count_m1_real = (num_filters-hight_fliter_count_m1)
                 hight_fliter_count_m1_real_cut = num_filters - hight_fliter_count_m1_real
@@ -308,7 +285,7 @@ def evolution(net):
                             low_cut_count_bias = 0
                     else:
                         low_cut_count_bias = 0
-                # part
+
                 if hight_fliter_count_b1_real > (num_filters-hight_fliter_count_b1):
                     hight_fliter_count_b1_real = (num_filters-hight_fliter_count_b1)
                 hight_fliter_count_b1_real_cut = num_filters - hight_fliter_count_b1_real
@@ -343,7 +320,6 @@ if __name__ == '__main__':
     ln_per = ln / args.ln_c 
     
     for epoch in range(start_epoch, args.epochs):
-        # 训练和测试的部分 
         print(time.strftime("%Y-%m-%d--%H:%M:%S", time.localtime()))
         start_time = time.time()
         train(epoch)
