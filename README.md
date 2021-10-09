@@ -21,4 +21,4 @@ For CIFAR, our code is based on https://github.com/kuangliu/pytorch-cifar.git
 
 For ImageNet, our code is based on https://github.com/pytorch/examples/tree/master/imagenet
 
-For Mobilenetv2, our code is based on https://github.com/Randl/MobileNetV2-pytorch
+For MobileNetV2, our code is based on https://github.com/Randl/MobileNetV2-pytorch
