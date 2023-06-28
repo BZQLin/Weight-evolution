@@ -256,7 +256,7 @@ def evolution(net):
                             low_cut_count_bn = 0
                     else:
                         low_cut_count_bn = 0
-=
+                        
                 if hight_fliter_count_m1_real > (num_filters-hight_fliter_count_m1):
                     hight_fliter_count_m1_real = (num_filters-hight_fliter_count_m1)
                 hight_fliter_count_m1_real_cut = num_filters - hight_fliter_count_m1_real
